@@ -3,8 +3,9 @@
 set -ex
 set -o pipefail
 
-BUILD_DIR=$1
+unzip input.zip
 
-cd $BUILD_DIR
+mkdir -p output
 
-# TODO(kahlers): Add logic
+xelatex -halt-on-error -output-directory=output *.tex
+xelatex -halt-on-error -output-directory=output *.tex

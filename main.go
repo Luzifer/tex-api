@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -24,7 +25,7 @@ import (
 
 var (
 	cfg = struct {
-		ExecutionScript string `flag:"script" default:"tex-build.sh" description:"Script to execute (needs to generate output directory)"`
+		ExecutionScript string `flag:"script" default:"/go/src/github.com/Luzifer/tex-api/tex-build.sh" description:"Script to execute (needs to generate output directory)"`
 		Listen          string `flag:"listen" default:":3000" description:"IP/Port to listen on"`
 		StorageDir      string `flag:"storage-dir" default:"/storage" description:"Where to store uploaded ZIPs and resulting files"`
 		VersionAndExit  bool   `flag:"version" default:"false" description:"Prints current version and exits"`
@@ -89,6 +90,13 @@ func (s statusOutput) Save() error {
 	return json.NewEncoder(f).Encode(s)
 }
 
+func urlMust(u *url.URL, err error) *url.URL {
+	if err != nil {
+		log.Fatalf("Unable to retrieve URL from router: %s", err)
+	}
+	return u
+}
+
 func init() {
 	if err := rconfig.Parse(&cfg); err != nil {
 		log.Fatalf("Unable to parse commandline options: %s", err)
@@ -128,8 +136,13 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if f, err := os.Create(inputFile); err == nil {
-		io.Copy(f, r.Body)
-		f.Close()
+		defer f.Close()
+		if _, err := io.Copy(f, r.Body); err != nil {
+			log.Errorf("Unable to copy input file %q: %s", inputFile, err)
+			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+			return
+		}
+		f.Sync()
 	} else {
 		log.Errorf("Unable to write input file %q: %s", inputFile, err)
 		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
@@ -150,7 +163,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	go jobProcessor(jobUUID)
 
-	u, _ := router.Get("getJobStatus").URL(jobUUID.String())
+	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 
@@ -216,7 +229,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if status.Status != statusFinished {
-		u, _ := router.Get("waitForJob").URL(uid.String())
+		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
 		u.Query().Set("loop", strconv.Itoa(loop))
 
 		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
@@ -224,7 +237,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 		http.Redirect(res, r, u.String(), http.StatusFound)
 	}
 
-	u, _ := router.Get("downloadAssets").URL(uid.String())
+	u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 
@@ -307,6 +320,7 @@ func jobProcessor(uid uuid.UUID) {
 
 	cmd := exec.Command("/bin/bash", cfg.ExecutionScript)
 	cmd.Dir = processingDir
+	cmd.Stderr = log.StandardLogger().WriterLevel(log.ErrorLevel)
 
 	status.UpdateStatus(statusStarted)
 	if err := status.Save(); err != nil {
