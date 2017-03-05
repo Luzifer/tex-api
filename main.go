@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"encoding/json"
@@ -299,6 +300,47 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	return buf, w.Close()
 }
 
+func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
+	buf := new(bytes.Buffer)
+	w := tar.NewWriter(buf)
+
+	basePath := pathFromUUID(uid, filenameOutputDir)
+	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !shouldPackFile(path.Ext(info.Name())) {
+			return nil
+		}
+
+		tarInfo, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
+		err = w.WriteHeader(tarInfo)
+		if err != nil {
+			return err
+		}
+		osFile, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+
+		io.Copy(w, osFile)
+		osFile.Close()
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, w.Close()
+}
+
 func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uid, err := uuid.FromString(vars["uid"])
@@ -313,6 +355,9 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	)
 
 	switch r.Header.Get("Accept") {
+	case "application/tar", "application/x-tar", "applicaton/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
+		content, err = buildAssetsTAR(uid)
+		filename = uid.String() + ".tar"
 	default:
 		content, err = buildAssetsZIP(uid)
 		filename = uid.String() + ".zip"
