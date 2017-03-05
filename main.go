@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Luzifer/go_helpers/str"
 	"github.com/Luzifer/rconfig"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -242,6 +243,13 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 
+func shouldPackFile(extension string) bool {
+	return str.StringInSlice(extension, []string{
+		".log",
+		".pdf",
+	})
+}
+
 func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
@@ -250,6 +258,10 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		if !shouldPackFile(path.Ext(info.Name())) {
+			return nil
 		}
 
 		zipInfo, err := zip.FileInfoHeader(info)
