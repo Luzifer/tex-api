@@ -229,7 +229,11 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if status.Status != statusFinished {
+	switch status.Status {
+	case statusCreated:
+		fallthrough
+
+	case statusStarted:
 		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
 		u.Query().Set("loop", strconv.Itoa(loop))
 
@@ -237,10 +241,14 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 		http.Redirect(res, r, u.String(), http.StatusFound)
 		return
-	}
 
-	u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
-	http.Redirect(res, r, u.String(), http.StatusFound)
+	case statusError:
+		http.Error(res, "Processing ran into an error.", http.StatusInternalServerError)
+
+	case statusFinished:
+		u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
+		http.Redirect(res, r, u.String(), http.StatusFound)
+	}
 }
 
 func shouldPackFile(extension string) bool {
