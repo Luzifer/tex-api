@@ -235,6 +235,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
 
 		http.Redirect(res, r, u.String(), http.StatusFound)
+		return
 	}
 
 	u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
