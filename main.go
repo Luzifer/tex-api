@@ -53,17 +53,17 @@ const (
 	sleepBase         = 1.5
 )
 
-type statusOutput struct {
+type jobStatus struct {
 	UUID      string    `json:"uuid"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Status    status    `json:"status"`
 }
 
-func loadStatusByUUID(uid uuid.UUID) (*statusOutput, error) {
+func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	statusFile := pathFromUUID(uid, filenameStatus)
 
-	status := statusOutput{}
+	status := jobStatus{}
 	if f, err := os.Open(statusFile); err == nil {
 		defer f.Close()
 		if err = json.NewDecoder(f).Decode(&status); err != nil {
@@ -76,12 +76,12 @@ func loadStatusByUUID(uid uuid.UUID) (*statusOutput, error) {
 	return &status, nil
 }
 
-func (s *statusOutput) UpdateStatus(st status) {
+func (s *jobStatus) UpdateStatus(st status) {
 	s.Status = st
 	s.UpdatedAt = time.Now()
 }
 
-func (s statusOutput) Save() error {
+func (s jobStatus) Save() error {
 	uid, _ := uuid.FromString(s.UUID)
 	f, err := os.Create(pathFromUUID(uid, filenameStatus))
 	if err != nil {
@@ -139,8 +139,8 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	if f, err := os.Create(inputFile); err == nil {
 		defer f.Close()
-		if _, err := io.Copy(f, r.Body); err != nil {
-			log.Errorf("Unable to copy input file %q: %s", inputFile, err)
+		if _, copyErr := io.Copy(f, r.Body); err != nil {
+			log.Errorf("Unable to copy input file %q: %s", inputFile, copyErr)
 			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
 			return
 		}
@@ -151,7 +151,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := statusOutput{
+	status := jobStatus{
 		UUID:      jobUUID.String(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -169,23 +169,6 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 
-func checkJobStatus(res http.ResponseWriter, r *http.Request) (uuid.UUID, string) {
-	vars := mux.Vars(r)
-	uid, err := uuid.FromString(vars["uid"])
-	if err != nil {
-		http.Error(res, "UUID had unexpected format!", http.StatusBadRequest)
-		return uid, ""
-	}
-
-	statusFile := pathFromUUID(uid, filenameStatus)
-	if _, err := os.Stat(statusFile); err != nil {
-		http.Error(res, "Status for this UUID not found.", http.StatusNotFound)
-		return uid, ""
-	}
-
-	return uid, statusFile
-}
-
 func getJobStatus(res http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uid, err := uuid.FromString(vars["uid"])
@@ -195,8 +178,8 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := loadStatusByUUID(uid); err == nil {
-		if err := json.NewEncoder(res).Encode(status); err != nil {
-			log.Errorf("Unable to serialize status file: %s", err)
+		if encErr := json.NewEncoder(res).Encode(status); err != nil {
+			log.Errorf("Unable to serialize status file: %s", encErr)
 			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
 			return
 		}
@@ -217,7 +200,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	var loop int
 	if v := r.URL.Query().Get("loop"); v != "" {
-		if pv, err := strconv.Atoi(v); err == nil {
+		if pv, convErr := strconv.Atoi(v); convErr == nil {
 			loop = pv
 		}
 	}
@@ -390,14 +373,14 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusStarted)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file: %s")
+		log.Errorf("Unable to save status file")
 		return
 	}
 
 	if err := cmd.Run(); err != nil {
 		status.UpdateStatus(statusError)
 		if err := status.Save(); err != nil {
-			log.Errorf("Unable to save status file: %s")
+			log.Errorf("Unable to save status file")
 			return
 		}
 		return
@@ -405,7 +388,7 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusFinished)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file: %s")
+		log.Errorf("Unable to save status file")
 		return
 	}
 }
