@@ -120,6 +120,11 @@ func main() {
 	log.Fatalf("%s", http.ListenAndServe(cfg.Listen, router))
 }
 
+func serverErrorf(res http.ResponseWriter, tpl string, args ...interface{}) {
+	log.Errorf(tpl, args...)
+	http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+}
+
 func pathFromUUID(uid uuid.UUID, filename string) string {
 	return path.Join(cfg.StorageDir, uid.String(), filename)
 }
@@ -140,14 +145,12 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	if f, err := os.Create(inputFile); err == nil {
 		defer f.Close()
 		if _, copyErr := io.Copy(f, r.Body); err != nil {
-			log.Errorf("Unable to copy input file %q: %s", inputFile, copyErr)
-			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+			serverErrorf(res, "Unable to copy input file %q: %s", inputFile, copyErr)
 			return
 		}
 		f.Sync()
 	} else {
-		log.Errorf("Unable to write input file %q: %s", inputFile, err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to write input file %q: %s", inputFile, err)
 		return
 	}
 
@@ -158,8 +161,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 		Status:    statusCreated,
 	}
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to create status file %q: %s", statusFile, err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to create status file %q: %s", statusFile, err)
 		return
 	}
 
@@ -179,13 +181,11 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 
 	if status, err := loadStatusByUUID(uid); err == nil {
 		if encErr := json.NewEncoder(res).Encode(status); err != nil {
-			log.Errorf("Unable to serialize status file: %s", encErr)
-			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+			serverErrorf(res, "Unable to serialize status file: %s", encErr)
 			return
 		}
 	} else {
-		log.Errorf("Unable to read status file: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to read status file: %s", err)
 		return
 	}
 }
@@ -208,8 +208,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	status, err := loadStatusByUUID(uid)
 	if err != nil {
-		log.Errorf("Unable to read status file: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to read status file: %s", err)
 		return
 	}
 
@@ -347,8 +346,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Errorf("Unable to generate downloadable asset: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to generate downloadable asset: %s", err)
 		return
 	}
 
