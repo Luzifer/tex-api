@@ -1,9 +1,6 @@
 package main
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,12 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/Luzifer/go_helpers/str"
 	"github.com/Luzifer/rconfig"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -53,17 +47,17 @@ const (
 	sleepBase         = 1.5
 )
 
-type statusOutput struct {
+type jobStatus struct {
 	UUID      string    `json:"uuid"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Status    status    `json:"status"`
 }
 
-func loadStatusByUUID(uid uuid.UUID) (*statusOutput, error) {
+func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	statusFile := pathFromUUID(uid, filenameStatus)
 
-	status := statusOutput{}
+	status := jobStatus{}
 	if f, err := os.Open(statusFile); err == nil {
 		defer f.Close()
 		if err = json.NewDecoder(f).Decode(&status); err != nil {
@@ -76,12 +70,12 @@ func loadStatusByUUID(uid uuid.UUID) (*statusOutput, error) {
 	return &status, nil
 }
 
-func (s *statusOutput) UpdateStatus(st status) {
+func (s *jobStatus) UpdateStatus(st status) {
 	s.Status = st
 	s.UpdatedAt = time.Now()
 }
 
-func (s statusOutput) Save() error {
+func (s jobStatus) Save() error {
 	uid, _ := uuid.FromString(s.UUID)
 	f, err := os.Create(pathFromUUID(uid, filenameStatus))
 	if err != nil {
@@ -120,6 +114,11 @@ func main() {
 	log.Fatalf("%s", http.ListenAndServe(cfg.Listen, router))
 }
 
+func serverErrorf(res http.ResponseWriter, tpl string, args ...interface{}) {
+	log.Errorf(tpl, args...)
+	http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+}
+
 func pathFromUUID(uid uuid.UUID, filename string) string {
 	return path.Join(cfg.StorageDir, uid.String(), filename)
 }
@@ -139,27 +138,24 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	if f, err := os.Create(inputFile); err == nil {
 		defer f.Close()
-		if _, err := io.Copy(f, r.Body); err != nil {
-			log.Errorf("Unable to copy input file %q: %s", inputFile, err)
-			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		if _, copyErr := io.Copy(f, r.Body); err != nil {
+			serverErrorf(res, "Unable to copy input file %q: %s", inputFile, copyErr)
 			return
 		}
 		f.Sync()
 	} else {
-		log.Errorf("Unable to write input file %q: %s", inputFile, err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to write input file %q: %s", inputFile, err)
 		return
 	}
 
-	status := statusOutput{
+	status := jobStatus{
 		UUID:      jobUUID.String(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Status:    statusCreated,
 	}
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to create status file %q: %s", statusFile, err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to create status file %q: %s", statusFile, err)
 		return
 	}
 
@@ -167,23 +163,6 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
 	http.Redirect(res, r, u.String(), http.StatusFound)
-}
-
-func checkJobStatus(res http.ResponseWriter, r *http.Request) (uuid.UUID, string) {
-	vars := mux.Vars(r)
-	uid, err := uuid.FromString(vars["uid"])
-	if err != nil {
-		http.Error(res, "UUID had unexpected format!", http.StatusBadRequest)
-		return uid, ""
-	}
-
-	statusFile := pathFromUUID(uid, filenameStatus)
-	if _, err := os.Stat(statusFile); err != nil {
-		http.Error(res, "Status for this UUID not found.", http.StatusNotFound)
-		return uid, ""
-	}
-
-	return uid, statusFile
 }
 
 func getJobStatus(res http.ResponseWriter, r *http.Request) {
@@ -195,14 +174,12 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := loadStatusByUUID(uid); err == nil {
-		if err := json.NewEncoder(res).Encode(status); err != nil {
-			log.Errorf("Unable to serialize status file: %s", err)
-			http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		if encErr := json.NewEncoder(res).Encode(status); err != nil {
+			serverErrorf(res, "Unable to serialize status file: %s", encErr)
 			return
 		}
 	} else {
-		log.Errorf("Unable to read status file: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to read status file: %s", err)
 		return
 	}
 }
@@ -217,7 +194,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	var loop int
 	if v := r.URL.Query().Get("loop"); v != "" {
-		if pv, err := strconv.Atoi(v); err == nil {
+		if pv, convErr := strconv.Atoi(v); convErr == nil {
 			loop = pv
 		}
 	}
@@ -225,8 +202,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	status, err := loadStatusByUUID(uid)
 	if err != nil {
-		log.Errorf("Unable to read status file: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to read status file: %s", err)
 		return
 	}
 
@@ -252,95 +228,6 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func shouldPackFile(extension string) bool {
-	return str.StringInSlice(extension, []string{
-		".log",
-		".pdf",
-	})
-}
-
-func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
-	buf := new(bytes.Buffer)
-	w := zip.NewWriter(buf)
-
-	basePath := pathFromUUID(uid, filenameOutputDir)
-	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !shouldPackFile(path.Ext(info.Name())) {
-			return nil
-		}
-
-		zipInfo, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		zipInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
-		zipFile, err := w.CreateHeader(zipInfo)
-		if err != nil {
-			return err
-		}
-		osFile, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-
-		io.Copy(zipFile, osFile)
-		osFile.Close()
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return buf, w.Close()
-}
-
-func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
-	buf := new(bytes.Buffer)
-	w := tar.NewWriter(buf)
-
-	basePath := pathFromUUID(uid, filenameOutputDir)
-	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !shouldPackFile(path.Ext(info.Name())) {
-			return nil
-		}
-
-		tarInfo, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
-		err = w.WriteHeader(tarInfo)
-		if err != nil {
-			return err
-		}
-		osFile, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-
-		io.Copy(w, osFile)
-		osFile.Close()
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return buf, w.Close()
-}
-
 func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uid, err := uuid.FromString(vars["uid"])
@@ -364,8 +251,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Errorf("Unable to generate downloadable asset: %s", err)
-		http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+		serverErrorf(res, "Unable to generate downloadable asset: %s", err)
 		return
 	}
 
@@ -390,14 +276,14 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusStarted)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file: %s")
+		log.Errorf("Unable to save status file")
 		return
 	}
 
 	if err := cmd.Run(); err != nil {
 		status.UpdateStatus(statusError)
 		if err := status.Save(); err != nil {
-			log.Errorf("Unable to save status file: %s")
+			log.Errorf("Unable to save status file")
 			return
 		}
 		return
@@ -405,7 +291,7 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusFinished)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file: %s")
+		log.Errorf("Unable to save status file")
 		return
 	}
 }
