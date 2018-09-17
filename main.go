@@ -108,7 +108,6 @@ func init() {
 }
 
 func main() {
-	router.HandleFunc("/", apiDocs).Methods("GET").Name("apiDocs")
 	router.HandleFunc("/job", startNewJob).Methods("POST").Name("startNewJob")
 	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}", getJobStatus).Methods("GET").Name("getJobStatus")
 	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/wait", waitForJob).Methods("GET").Name("waitForJob")
@@ -126,10 +125,6 @@ func serverErrorf(res http.ResponseWriter, err error, tpl string, args ...interf
 
 func pathFromUUID(uid uuid.UUID, filename string) string {
 	return path.Join(cfg.StorageDir, uid.String(), filename)
-}
-
-func apiDocs(res http.ResponseWriter, r *http.Request) {
-	http.Error(res, "Not implemented yet", http.StatusInternalServerError)
 }
 
 func startNewJob(res http.ResponseWriter, r *http.Request) {
