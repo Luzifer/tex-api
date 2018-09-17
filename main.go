@@ -90,14 +90,14 @@ func (s jobStatus) Save() error {
 
 func urlMust(u *url.URL, err error) *url.URL {
 	if err != nil {
-		log.Fatalf("Unable to retrieve URL from router: %s", err)
+		log.WithError(err).Fatal("Unable to retrieve URL from router")
 	}
 	return u
 }
 
 func init() {
 	if err := rconfig.Parse(&cfg); err != nil {
-		log.Fatalf("Unable to parse commandline options: %s", err)
+		log.WithError(err).Fatal("Unable to parse commandline options")
 	}
 
 	if cfg.VersionAndExit {
@@ -113,11 +113,13 @@ func main() {
 	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/wait", waitForJob).Methods("GET").Name("waitForJob")
 	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/download", downloadAssets).Methods("GET").Name("downloadAssets")
 
-	log.Fatalf("%s", http.ListenAndServe(cfg.Listen, router))
+	if err := http.ListenAndServe(cfg.Listen, router); err != nil {
+		log.WithError(err).Fatal("HTTP server exited with error")
+	}
 }
 
-func serverErrorf(res http.ResponseWriter, tpl string, args ...interface{}) {
-	log.Errorf(tpl, args...)
+func serverErrorf(res http.ResponseWriter, err error, tpl string, args ...interface{}) {
+	log.WithError(err).Errorf(tpl, args...)
 	http.Error(res, "An error occurred. See details in log.", http.StatusInternalServerError)
 }
 
@@ -135,18 +137,18 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	statusFile := pathFromUUID(jobUUID, filenameStatus)
 
 	if err := os.Mkdir(path.Dir(inputFile), 0750); err != nil {
-		log.Errorf("Unable to create job dir %q: %s", path.Dir(inputFile), err)
+		log.WithError(err).Errorf("Unable to create job dir %q", path.Dir(inputFile))
 	}
 
 	if f, err := os.Create(inputFile); err == nil {
 		defer f.Close()
 		if _, copyErr := io.Copy(f, r.Body); err != nil {
-			serverErrorf(res, "Unable to copy input file %q: %s", inputFile, copyErr)
+			serverErrorf(res, copyErr, "Unable to copy input file %q", inputFile)
 			return
 		}
 		f.Sync() // #nosec G104
 	} else {
-		serverErrorf(res, "Unable to write input file %q: %s", inputFile, err)
+		serverErrorf(res, err, "Unable to write input file %q", inputFile)
 		return
 	}
 
@@ -157,7 +159,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 		Status:    statusCreated,
 	}
 	if err := status.Save(); err != nil {
-		serverErrorf(res, "Unable to create status file %q: %s", statusFile, err)
+		serverErrorf(res, err, "Unable to create status file %q", statusFile)
 		return
 	}
 
@@ -177,11 +179,11 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 
 	if status, err := loadStatusByUUID(uid); err == nil {
 		if encErr := json.NewEncoder(res).Encode(status); err != nil {
-			serverErrorf(res, "Unable to serialize status file: %s", encErr)
+			serverErrorf(res, encErr, "Unable to serialize status file")
 			return
 		}
 	} else {
-		serverErrorf(res, "Unable to read status file: %s", err)
+		serverErrorf(res, err, "Unable to read status file")
 		return
 	}
 }
@@ -204,7 +206,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	status, err := loadStatusByUUID(uid)
 	if err != nil {
-		serverErrorf(res, "Unable to read status file: %s", err)
+		serverErrorf(res, err, "Unable to read status file")
 		return
 	}
 
@@ -255,7 +257,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		serverErrorf(res, "Unable to generate downloadable asset: %s", err)
+		serverErrorf(res, err, "Unable to generate downloadable asset")
 		return
 	}
 
@@ -270,7 +272,7 @@ func jobProcessor(uid uuid.UUID) {
 	processingDir := path.Dir(pathFromUUID(uid, filenameStatus))
 	status, err := loadStatusByUUID(uid)
 	if err != nil {
-		log.Errorf("Unable to load status file in processing job: %s", err)
+		log.WithError(err).Error("Unable to load status file in processing job")
 		return
 	}
 
@@ -280,14 +282,14 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusStarted)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file")
+		log.WithError(err).Error("Unable to save status file")
 		return
 	}
 
 	if err := cmd.Run(); err != nil {
 		status.UpdateStatus(statusError)
 		if err := status.Save(); err != nil {
-			log.Errorf("Unable to save status file")
+			log.WithError(err).Error("Unable to save status file")
 			return
 		}
 		return
@@ -295,7 +297,7 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusFinished)
 	if err := status.Save(); err != nil {
-		log.Errorf("Unable to save status file")
+		log.WithError(err).Error("Unable to save status file")
 		return
 	}
 }
