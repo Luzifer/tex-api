@@ -270,27 +270,31 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 }
 
 func jobProcessor(uid uuid.UUID) {
+	logger := log.WithField("uuid", uid)
+	logger.Info("Started processing")
+
 	processingDir := path.Dir(pathFromUUID(uid, filenameStatus))
 	status, err := loadStatusByUUID(uid)
 	if err != nil {
-		log.WithError(err).Error("Unable to load status file in processing job")
+		logger.WithError(err).Error("Unable to load status file in processing job")
 		return
 	}
 
 	cmd := exec.Command("/bin/bash", cfg.Script) // #nosec G204
 	cmd.Dir = processingDir
-	cmd.Stderr = log.StandardLogger().WriterLevel(log.ErrorLevel)
+	cmd.Stderr = logger.WriterLevel(log.InfoLevel) // Bash uses stderr for `-x` parameter
 
 	status.UpdateStatus(statusStarted)
 	if err := status.Save(); err != nil {
-		log.WithError(err).Error("Unable to save status file")
+		logger.WithError(err).Error("Unable to save status file")
 		return
 	}
 
 	if err := cmd.Run(); err != nil {
+		logger.WithError(err).Error("Processing failed")
 		status.UpdateStatus(statusError)
 		if err := status.Save(); err != nil {
-			log.WithError(err).Error("Unable to save status file")
+			logger.WithError(err).Error("Unable to save status file")
 			return
 		}
 		return
@@ -298,7 +302,8 @@ func jobProcessor(uid uuid.UUID) {
 
 	status.UpdateStatus(statusFinished)
 	if err := status.Save(); err != nil {
-		log.WithError(err).Error("Unable to save status file")
+		logger.WithError(err).Error("Unable to save status file")
 		return
 	}
+	logger.Info("Finished processing")
 }
