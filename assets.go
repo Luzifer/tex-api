@@ -44,13 +44,15 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		osFile, err := os.Open(p)
+		osFile, err := os.Open(p) // #nosec G304
 		if err != nil {
 			return err
 		}
 
-		io.Copy(zipFile, osFile)
-		osFile.Close()
+		if _, err := io.Copy(zipFile, osFile); err != nil {
+			return err
+		}
+		osFile.Close() // #nosec G104
 
 		return nil
 	})
@@ -85,13 +87,15 @@ func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		osFile, err := os.Open(p)
+		osFile, err := os.Open(p) // #nosec G304
 		if err != nil {
 			return err
 		}
 
-		io.Copy(w, osFile)
-		osFile.Close()
+		if _, err := io.Copy(w, osFile); err != nil {
+			return err
+		}
+		osFile.Close() // #nosec G104
 
 		return nil
 	})

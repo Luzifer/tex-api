@@ -58,6 +58,7 @@ func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	statusFile := pathFromUUID(uid, filenameStatus)
 
 	status := jobStatus{}
+	// #nosec G304
 	if f, err := os.Open(statusFile); err == nil {
 		defer f.Close()
 		if err = json.NewDecoder(f).Decode(&status); err != nil {
@@ -76,7 +77,7 @@ func (s *jobStatus) UpdateStatus(st status) {
 }
 
 func (s jobStatus) Save() error {
-	uid, _ := uuid.FromString(s.UUID)
+	uid, _ := uuid.FromString(s.UUID) // #nosec G104
 	f, err := os.Create(pathFromUUID(uid, filenameStatus))
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func main() {
 
 func serverErrorf(res http.ResponseWriter, tpl string, args ...interface{}) {
 	log.Errorf(tpl, args...)
-	http.Error(res, "An error ocurred. See details in log.", http.StatusInternalServerError)
+	http.Error(res, "An error occurred. See details in log.", http.StatusInternalServerError)
 }
 
 func pathFromUUID(uid uuid.UUID, filename string) string {
@@ -132,7 +133,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	inputFile := pathFromUUID(jobUUID, filenameInput)
 	statusFile := pathFromUUID(jobUUID, filenameStatus)
 
-	if err := os.Mkdir(path.Dir(inputFile), 0755); err != nil {
+	if err := os.Mkdir(path.Dir(inputFile), 0750); err != nil {
 		log.Errorf("Unable to create job dir %q: %s", path.Dir(inputFile), err)
 	}
 
@@ -142,7 +143,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 			serverErrorf(res, "Unable to copy input file %q: %s", inputFile, copyErr)
 			return
 		}
-		f.Sync()
+		f.Sync() // #nosec G104
 	} else {
 		serverErrorf(res, "Unable to write input file %q: %s", inputFile, err)
 		return
@@ -243,7 +244,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	)
 
 	switch r.Header.Get("Accept") {
-	case "application/tar", "application/x-tar", "applicaton/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
+	case "application/tar", "application/x-tar", "application/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
 		contentType = "application/tar"
 		content, err = buildAssetsTAR(uid)
 		filename = uid.String() + ".tar"
@@ -261,7 +262,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", contentType)
 	res.WriteHeader(http.StatusOK)
 
-	io.Copy(res, content)
+	io.Copy(res, content) // #nosec G104
 }
 
 func jobProcessor(uid uuid.UUID) {
@@ -272,7 +273,7 @@ func jobProcessor(uid uuid.UUID) {
 		return
 	}
 
-	cmd := exec.Command("/bin/bash", cfg.ExecutionScript)
+	cmd := exec.Command("/bin/bash", cfg.ExecutionScript) // #nosec G204
 	cmd.Dir = processingDir
 	cmd.Stderr = log.StandardLogger().WriterLevel(log.ErrorLevel)
 
