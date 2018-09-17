@@ -18,12 +18,12 @@
   version = "v2.1.0"
 
 [[projects]]
-  digest = "1:b2339e83ce9b5c4f79405f949429a7f68a9a904fed903c672aac1e7ceb7f5f02"
-  name = "github.com/Sirupsen/logrus"
+  digest = "1:100f874677364387717ee2becf81bede9b2475634958a54accac40a2b8866773"
+  name = "github.com/gofrs/uuid"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "3e01752db0189b9157070a0e1668a620f9a85da2"
-  version = "v1.0.6"
+  revision = "370558f003bfe29580cd0f698d8640daccdcc45c"
+  version = "v3.1.1"
 
 [[projects]]
   digest = "1:c01767916c59f084bb7c41a7d5877c0f3099b1595cfa066e84ec6ad6b084dd89"
@@ -42,12 +42,12 @@
   version = "v1.6.2"
 
 [[projects]]
-  digest = "1:6bc0652ea6e39e22ccd522458b8bdd8665bf23bdc5a20eec90056e4dc7e273ca"
-  name = "github.com/satori/go.uuid"
+  digest = "1:b2339e83ce9b5c4f79405f949429a7f68a9a904fed903c672aac1e7ceb7f5f02"
+  name = "github.com/sirupsen/logrus"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
-  version = "v1.2.0"
+  revision = "3e01752db0189b9157070a0e1668a620f9a85da2"
+  version = "v1.0.6"
 
 [[projects]]
   digest = "1:e3707aeaccd2adc89eba6c062fec72116fe1fc1ba71097da85b4d8ae1668a675"
@@ -98,9 +98,9 @@
   input-imports = [
     "github.com/Luzifer/go_helpers/str",
     "github.com/Luzifer/rconfig",
-    "github.com/Sirupsen/logrus",
+    "github.com/gofrs/uuid",
     "github.com/gorilla/mux",
-    "github.com/satori/go.uuid",
+    "github.com/sirupsen/logrus",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

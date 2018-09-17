@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/Luzifer/go_helpers/str"
-	uuid "github.com/satori/go.uuid"
+
+	"github.com/gofrs/uuid"
 )
 
 func shouldPackFile(extension string) bool {

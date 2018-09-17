@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/Luzifer/rconfig"
-	log "github.com/Sirupsen/logrus"
+
+	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
-	uuid "github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -129,7 +130,7 @@ func apiDocs(res http.ResponseWriter, r *http.Request) {
 }
 
 func startNewJob(res http.ResponseWriter, r *http.Request) {
-	jobUUID := uuid.NewV4()
+	jobUUID := uuid.Must(uuid.NewV4())
 	inputFile := pathFromUUID(jobUUID, filenameInput)
 	statusFile := pathFromUUID(jobUUID, filenameStatus)
 
