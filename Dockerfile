@@ -1,26 +1,29 @@
-FROM golang
-
-MAINTAINER Knut Ahlers <knut@ahlers.me>
-
-RUN set -ex \
- && apt-get update \
- && apt-get install -y texlive-full \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+FROM golang:alpine as builder
 
 ADD . /go/src/github.com/Luzifer/tex-api
 WORKDIR /go/src/github.com/Luzifer/tex-api
 
 RUN set -ex \
- && apt-get update \
- && apt-get install -y git ca-certificates \
- && go install -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)" \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+ && apk add --update git \
+ && go install -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)"
+
+FROM alpine:latest
+
+LABEL maintainer "Knut Ahlers <knut@ahlers.me>"
+
+RUN set -ex \
+ && apk --no-cache add \
+      bash \
+      ca-certificates \
+      texlive-full
+
+COPY --from=builder /go/bin/tex-api /usr/local/bin/
+COPY --from=builder /go/src/github.com/Luzifer/tex-api/tex-build.sh /usr/local/bin/
 
 EXPOSE 3000
-
 VOLUME ["/storage"]
 
-ENTRYPOINT ["/go/bin/tex-api"]
-CMD ["--"]
+ENTRYPOINT ["/usr/local/bin/tex-api"]
+CMD ["--script", "/usr/local/bin/tex-build.sh"]
+
+# vim: set ft=Dockerfile:
