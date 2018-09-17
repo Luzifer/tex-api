@@ -1,7 +1,5 @@
 #!/bin/bash
-
-set -ex
-set -o pipefail
+set -euxo pipefail
 
 unzip input.zip
 
