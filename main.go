@@ -22,10 +22,10 @@ import (
 
 var (
 	cfg = struct {
-		ExecutionScript string `flag:"script" default:"/go/src/github.com/Luzifer/tex-api/tex-build.sh" description:"Script to execute (needs to generate output directory)"`
-		Listen          string `flag:"listen" default:":3000" description:"IP/Port to listen on"`
-		StorageDir      string `flag:"storage-dir" default:"/storage" description:"Where to store uploaded ZIPs and resulting files"`
-		VersionAndExit  bool   `flag:"version" default:"false" description:"Prints current version and exits"`
+		Script         string `flag:"script" default:"tex-build.sh" description:"Script to execute (needs to generate output directory)"`
+		Listen         string `flag:"listen" default:":3000" description:"IP/Port to listen on"`
+		StorageDir     string `flag:"storage-dir" default:"/storage" description:"Where to store uploaded ZIPs and resulting files"`
+		VersionAndExit bool   `flag:"version" default:"false" description:"Prints current version and exits"`
 	}{}
 
 	version = "dev"
@@ -96,6 +96,7 @@ func urlMust(u *url.URL, err error) *url.URL {
 }
 
 func init() {
+	rconfig.AutoEnv(true)
 	if err := rconfig.Parse(&cfg); err != nil {
 		log.WithError(err).Fatal("Unable to parse commandline options")
 	}
@@ -276,7 +277,7 @@ func jobProcessor(uid uuid.UUID) {
 		return
 	}
 
-	cmd := exec.Command("/bin/bash", cfg.ExecutionScript) // #nosec G204
+	cmd := exec.Command("/bin/bash", cfg.Script) // #nosec G204
 	cmd.Dir = processingDir
 	cmd.Stderr = log.StandardLogger().WriterLevel(log.ErrorLevel)
 
