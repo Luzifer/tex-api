@@ -1,3 +1,8 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/Luzifer/tex-api)](https://goreportcard.com/report/github.com/Luzifer/tex-api)
+![](https://badges.fyi/github/license/Luzifer/tex-api)
+![](https://badges.fyi/github/downloads/Luzifer/tex-api)
+![](https://badges.fyi/github/latest-release/Luzifer/tex-api)
+
 # Luzifer / tex-api
 
 `tex-api` is a docker container being able to generate a PDF document from a LaTeX file and additional assets using a simple `curl` call.
