@@ -237,12 +237,14 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		content  io.Reader
-		filename string
+		content     io.Reader
+		contentType = "application/zip"
+		filename    string
 	)
 
 	switch r.Header.Get("Accept") {
 	case "application/tar", "application/x-tar", "applicaton/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
+		contentType = "application/tar"
 		content, err = buildAssetsTAR(uid)
 		filename = uid.String() + ".tar"
 	default:
@@ -256,7 +258,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	}
 
 	res.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	res.Header().Set("Content-Type", "application/octet-stream") // TODO(luzifer): Use a correct type?
+	res.Header().Set("Content-Type", contentType)
 	res.WriteHeader(http.StatusOK)
 
 	io.Copy(res, content)
