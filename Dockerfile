@@ -4,10 +4,11 @@ COPY . /go/src/github.com/Luzifer/tex-api
 WORKDIR /go/src/github.com/Luzifer/tex-api
 
 RUN set -ex \
- && apk add --update git \
+ && apk add --no-cache \
+      git \
  && go install -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)"
 
-FROM alpine:3.8
+FROM alpine:3.10
 
 LABEL maintainer "Knut Ahlers <knut@ahlers.me>"
 
@@ -17,10 +18,11 @@ RUN set -ex \
  && apk --no-cache add \
       bash \
       ca-certificates \
-      texlive-full
+      texlive-xetex \
+      texmf-dist-most
 
 COPY --from=builder /go/bin/tex-api /usr/local/bin/
-COPY --from=builder /go/src/github.com/Luzifer/tex-api/tex-build.sh /usr/local/bin/
+COPY                tex-build.sh    /usr/local/bin/
 
 EXPOSE 3000
 VOLUME ["/storage"]
