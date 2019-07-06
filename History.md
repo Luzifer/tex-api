@@ -1,3 +1,10 @@
+# 0.3.0 / 2019-07-06
+
+  * Fix broken error handling
+  * Update vendored packages
+  * Switch from dep to go mod
+  * Update Alpine, lower image size
+
 # 0.2.0 / 2018-09-17
 
   * Remove never implemented api docs
