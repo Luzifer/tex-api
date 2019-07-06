@@ -1,12 +1,16 @@
 FROM golang:alpine as builder
 
+ENV GO111MODULE=on
+
 COPY . /go/src/github.com/Luzifer/tex-api
 WORKDIR /go/src/github.com/Luzifer/tex-api
 
 RUN set -ex \
  && apk add --no-cache \
       git \
- && go install -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)"
+ && go install \
+      -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)" \
+      -mod=vendor
 
 FROM alpine:3.10
 

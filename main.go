@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Luzifer/rconfig"
+	"github.com/Luzifer/rconfig/v2"
 
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
