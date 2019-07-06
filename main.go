@@ -138,7 +138,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	if f, err := os.Create(inputFile); err == nil {
 		defer f.Close()
-		if _, copyErr := io.Copy(f, r.Body); err != nil {
+		if _, copyErr := io.Copy(f, r.Body); copyErr != nil {
 			serverErrorf(res, copyErr, "Unable to copy input file %q", inputFile)
 			return
 		}
@@ -174,7 +174,7 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := loadStatusByUUID(uid); err == nil {
-		if encErr := json.NewEncoder(res).Encode(status); err != nil {
+		if encErr := json.NewEncoder(res).Encode(status); encErr != nil {
 			serverErrorf(res, encErr, "Unable to serialize status file")
 			return
 		}
