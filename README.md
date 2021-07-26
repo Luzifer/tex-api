@@ -10,7 +10,7 @@
 ## Usage
 
 - Start the container at a trusted location:  
-`docker run -d -p 3000:3000 -v /data/tex-api:/storage quay.io/luzifer/tex-api`
+`docker run -d -p 3000:3000 -v /data/tex-api:/storage luzifer/tex-api`
 - Compile a ZIP file, send it to the API and get the result:
 
 ```bash
