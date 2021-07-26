@@ -1,7 +1,5 @@
 FROM golang:alpine as builder
 
-ENV GO111MODULE=on
-
 COPY . /go/src/github.com/Luzifer/tex-api
 WORKDIR /go/src/github.com/Luzifer/tex-api
 
@@ -10,9 +8,9 @@ RUN set -ex \
       git \
  && go install \
       -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)" \
-      -mod=vendor
+      -mod=readonly
 
-FROM alpine:3.10
+FROM alpine:latest
 
 LABEL maintainer "Knut Ahlers <knut@ahlers.me>"
 
