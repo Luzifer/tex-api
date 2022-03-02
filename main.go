@@ -42,10 +42,11 @@ const (
 )
 
 const (
-	filenameInput     = "input.zip"
-	filenameStatus    = "status.json"
-	filenameOutputDir = "output"
-	sleepBase         = 1.5
+	filenameInput      = "input.zip"
+	filenameStatus     = "status.json"
+	filenameStatusTemp = "status.tmp.json"
+	filenameOutputDir  = "output"
+	sleepBase          = 1.5
 )
 
 type jobStatus struct {
@@ -79,13 +80,20 @@ func (s *jobStatus) UpdateStatus(st status) {
 
 func (s jobStatus) Save() error {
 	uid, _ := uuid.FromString(s.UUID) // #nosec G104
-	f, err := os.Create(pathFromUUID(uid, filenameStatus))
+	f, err := os.Create(pathFromUUID(uid, filenameStatusTemp))
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	return json.NewEncoder(f).Encode(s)
+	if err = json.NewEncoder(f).Encode(s); err != nil {
+		return err
+	}
+
+	return os.Rename(
+		pathFromUUID(uid, filenameStatusTemp),
+		pathFromUUID(uid, filenameStatus),
+	)
 }
 
 func urlMust(u *url.URL, err error) *url.URL {
