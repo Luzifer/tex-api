@@ -1,3 +1,10 @@
+# 0.4.0 / 2022-03-03
+
+  * Use atomic operations to update status
+  * Update image location
+  * Update dependencies
+  * Remove vendoring
+
 # 0.3.0 / 2019-07-06
 
   * Fix broken error handling
