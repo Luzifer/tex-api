@@ -1,3 +1,7 @@
+# 0.4.1 / 2023-08-30
+
+  * Update dependencies
+
 # 0.4.0 / 2022-03-03
 
   * Use atomic operations to update status
