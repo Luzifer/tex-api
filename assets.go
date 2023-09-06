@@ -12,6 +12,7 @@ import (
 
 	"github.com/Luzifer/go_helpers/v2/str"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/gofrs/uuid"
 )
@@ -43,11 +44,15 @@ func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
 		if err != nil {
 			return errors.Wrap(err, "opening source file")
 		}
+		defer func() {
+			if err := osFile.Close(); err != nil {
+				logrus.WithError(err).Error("closing output file (leaked fd)")
+			}
+		}()
 
 		if _, err := io.Copy(w, osFile); err != nil {
 			return errors.Wrap(err, "copying source file")
 		}
-		osFile.Close() // #nosec G104
 
 		return nil
 	})
@@ -85,11 +90,15 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 		if err != nil {
 			return errors.Wrap(err, "opening source file")
 		}
+		defer func() {
+			if err := osFile.Close(); err != nil {
+				logrus.WithError(err).Error("closing output file (leaked fd)")
+			}
+		}()
 
 		if _, err := io.Copy(zipFile, osFile); err != nil {
 			return errors.Wrap(err, "copying source file")
 		}
-		osFile.Close() // #nosec G104
 
 		return nil
 	})
@@ -120,11 +129,15 @@ func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
 		if err != nil {
 			return errors.Wrap(err, "opening file")
 		}
+		defer func() {
+			if err := osFile.Close(); err != nil {
+				logrus.WithError(err).Error("closing output pdf file (leaked fd)")
+			}
+		}()
 
 		if _, err := io.Copy(buf, osFile); err != nil {
 			return errors.Wrap(err, "reading file")
 		}
-		osFile.Close() // #nosec G104
 
 		found = true
 		return filepath.SkipAll

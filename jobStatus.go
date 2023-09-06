@@ -9,6 +9,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type (
@@ -59,7 +60,11 @@ func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "opening status file")
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			logrus.WithError(err).Error("closing status file (leaked fd)")
+		}
+	}()
 
 	if err = json.NewDecoder(f).Decode(&status); err != nil {
 		return nil, errors.Wrap(err, "decoding status file")
@@ -79,7 +84,11 @@ func (s jobStatus) Save() error {
 	if err != nil {
 		return errors.Wrap(err, "creating status file")
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			logrus.WithError(err).Error("closing status file (leaked fd)")
+		}
+	}()
 
 	if err = json.NewEncoder(f).Encode(s); err != nil {
 		return errors.Wrap(err, "encoding status")
