@@ -1,23 +1,26 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
-	"net/url"
 	"os"
-	"os/exec"
-	"path"
-	"strconv"
 	"time"
 
 	"github.com/Luzifer/rconfig/v2"
+	"github.com/pkg/errors"
 
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	filenameInput      = "input.zip"
+	filenameStatus     = "status.json"
+	filenameStatusTemp = "status.tmp.json"
+	filenameOutputDir  = "output"
+	sleepBase          = 1.5
 )
 
 var (
@@ -32,207 +35,50 @@ var (
 	router  = mux.NewRouter()
 )
 
-type status string
-
-const (
-	statusCreated  = "created"
-	statusStarted  = "started"
-	statusError    = "error"
-	statusFinished = "finished"
-)
-
-const (
-	filenameInput      = "input.zip"
-	filenameStatus     = "status.json"
-	filenameStatusTemp = "status.tmp.json"
-	filenameOutputDir  = "output"
-	sleepBase          = 1.5
-)
-
-type jobStatus struct {
-	UUID      string    `json:"uuid"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Status    status    `json:"status"`
-}
-
-func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
-	statusFile := pathFromUUID(uid, filenameStatus)
-
-	status := jobStatus{}
-	// #nosec G304
-	if f, err := os.Open(statusFile); err == nil {
-		defer f.Close()
-		if err = json.NewDecoder(f).Decode(&status); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, err
-	}
-
-	return &status, nil
-}
-
-func (s *jobStatus) UpdateStatus(st status) {
-	s.Status = st
-	s.UpdatedAt = time.Now()
-}
-
-func (s jobStatus) Save() error {
-	uid, _ := uuid.FromString(s.UUID) // #nosec G104
-	f, err := os.Create(pathFromUUID(uid, filenameStatusTemp))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if err = json.NewEncoder(f).Encode(s); err != nil {
-		return err
-	}
-
-	return os.Rename(
-		pathFromUUID(uid, filenameStatusTemp),
-		pathFromUUID(uid, filenameStatus),
-	)
-}
-
-func urlMust(u *url.URL, err error) *url.URL {
-	if err != nil {
-		log.WithError(err).Fatal("Unable to retrieve URL from router")
-	}
-	return u
-}
-
-func init() {
+func initApp() error {
 	rconfig.AutoEnv(true)
 	if err := rconfig.Parse(&cfg); err != nil {
-		log.WithError(err).Fatal("Unable to parse commandline options")
+		return errors.Wrap(err, "parsing cli options")
 	}
 
-	if cfg.VersionAndExit {
-		fmt.Printf("tex-api %s\n", version)
-		os.Exit(0)
-	}
+	return nil
 }
 
 func main() {
-	router.HandleFunc("/job", startNewJob).Methods("POST").Name("startNewJob")
-	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}", getJobStatus).Methods("GET").Name("getJobStatus")
-	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/wait", waitForJob).Methods("GET").Name("waitForJob")
-	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/download", downloadAssets).Methods("GET").Name("downloadAssets")
-
-	if err := http.ListenAndServe(cfg.Listen, router); err != nil {
-		log.WithError(err).Fatal("HTTP server exited with error")
-	}
-}
-
-func serverErrorf(res http.ResponseWriter, err error, tpl string, args ...interface{}) {
-	log.WithError(err).Errorf(tpl, args...)
-	http.Error(res, "An error occurred. See details in log.", http.StatusInternalServerError)
-}
-
-func pathFromUUID(uid uuid.UUID, filename string) string {
-	return path.Join(cfg.StorageDir, uid.String(), filename)
-}
-
-func startNewJob(res http.ResponseWriter, r *http.Request) {
-	jobUUID := uuid.Must(uuid.NewV4())
-	inputFile := pathFromUUID(jobUUID, filenameInput)
-	statusFile := pathFromUUID(jobUUID, filenameStatus)
-
-	if err := os.Mkdir(path.Dir(inputFile), 0750); err != nil {
-		log.WithError(err).Errorf("Unable to create job dir %q", path.Dir(inputFile))
+	var err error
+	if err = initApp(); err != nil {
+		logrus.WithError(err).Fatal("app initialization failed")
 	}
 
-	if f, err := os.Create(inputFile); err == nil {
-		defer f.Close()
-		if _, copyErr := io.Copy(f, r.Body); copyErr != nil {
-			serverErrorf(res, copyErr, "Unable to copy input file %q", inputFile)
-			return
-		}
-		f.Sync() // #nosec G104
-	} else {
-		serverErrorf(res, err, "Unable to write input file %q", inputFile)
-		return
+	if cfg.VersionAndExit {
+		logrus.WithField("version", version).Info("tex-api")
+		os.Exit(0)
 	}
 
-	status := jobStatus{
-		UUID:      jobUUID.String(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Status:    statusCreated,
-	}
-	if err := status.Save(); err != nil {
-		serverErrorf(res, err, "Unable to create status file %q", statusFile)
-		return
-	}
+	router.HandleFunc("/job", startNewJob).
+		Methods("POST").
+		Name("startNewJob")
 
-	go jobProcessor(jobUUID)
+	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}", getJobStatus).
+		Methods("GET").
+		Name("getJobStatus")
 
-	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
-	http.Redirect(res, r, u.String(), http.StatusFound)
-}
+	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/wait", waitForJob).
+		Methods("GET").
+		Name("waitForJob")
 
-func getJobStatus(res http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	uid, err := uuid.FromString(vars["uid"])
-	if err != nil {
-		http.Error(res, "UUID had unexpected format!", http.StatusBadRequest)
-		return
+	router.HandleFunc("/job/{uid:[0-9a-z-]{36}}/download", downloadAssets).
+		Methods("GET").
+		Name("downloadAssets")
+
+	server := &http.Server{
+		Addr:              cfg.Listen,
+		Handler:           router,
+		ReadHeaderTimeout: time.Second,
 	}
 
-	if status, err := loadStatusByUUID(uid); err == nil {
-		if encErr := json.NewEncoder(res).Encode(status); encErr != nil {
-			serverErrorf(res, encErr, "Unable to serialize status file")
-			return
-		}
-	} else {
-		serverErrorf(res, err, "Unable to read status file")
-		return
-	}
-}
-
-func waitForJob(res http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	uid, err := uuid.FromString(vars["uid"])
-	if err != nil {
-		http.Error(res, "UUID had unexpected format!", http.StatusBadRequest)
-		return
-	}
-
-	var loop int
-	if v := r.URL.Query().Get("loop"); v != "" {
-		if pv, convErr := strconv.Atoi(v); convErr == nil {
-			loop = pv
-		}
-	}
-	loop++
-
-	status, err := loadStatusByUUID(uid)
-	if err != nil {
-		serverErrorf(res, err, "Unable to read status file")
-		return
-	}
-
-	switch status.Status {
-	case statusCreated:
-		fallthrough
-
-	case statusStarted:
-		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
-		u.Query().Set("loop", strconv.Itoa(loop))
-
-		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
-
-		http.Redirect(res, r, u.String(), http.StatusFound)
-		return
-
-	case statusError:
-		http.Error(res, "Processing ran into an error.", http.StatusInternalServerError)
-
-	case statusFinished:
-		u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
-		http.Redirect(res, r, u.String(), http.StatusFound)
+	if err := server.ListenAndServe(); err != nil {
+		logrus.WithError(err).Fatal("HTTP server exited with error")
 	}
 }
 
@@ -255,13 +101,19 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 		contentType = "application/tar"
 		content, err = buildAssetsTAR(uid)
 		filename = uid.String() + ".tar"
+
+	case "application/pdf":
+		contentType = "application/pdf"
+		content, err = getAssetsPDF(uid)
+		filename = uid.String() + ".pdf"
+
 	default:
 		content, err = buildAssetsZIP(uid)
 		filename = uid.String() + ".zip"
 	}
 
 	if err != nil {
-		serverErrorf(res, err, "Unable to generate downloadable asset")
+		serverErrorf(res, err, "generating downloadable asset")
 		return
 	}
 
@@ -270,43 +122,4 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	res.WriteHeader(http.StatusOK)
 
 	io.Copy(res, content) // #nosec G104
-}
-
-func jobProcessor(uid uuid.UUID) {
-	logger := log.WithField("uuid", uid)
-	logger.Info("Started processing")
-
-	processingDir := path.Dir(pathFromUUID(uid, filenameStatus))
-	status, err := loadStatusByUUID(uid)
-	if err != nil {
-		logger.WithError(err).Error("Unable to load status file in processing job")
-		return
-	}
-
-	cmd := exec.Command("/bin/bash", cfg.Script) // #nosec G204
-	cmd.Dir = processingDir
-	cmd.Stderr = logger.WriterLevel(log.InfoLevel) // Bash uses stderr for `-x` parameter
-
-	status.UpdateStatus(statusStarted)
-	if err := status.Save(); err != nil {
-		logger.WithError(err).Error("Unable to save status file")
-		return
-	}
-
-	if err := cmd.Run(); err != nil {
-		logger.WithError(err).Error("Processing failed")
-		status.UpdateStatus(statusError)
-		if err := status.Save(); err != nil {
-			logger.WithError(err).Error("Unable to save status file")
-			return
-		}
-		return
-	}
-
-	status.UpdateStatus(statusFinished)
-	if err := status.Save(); err != nil {
-		logger.WithError(err).Error("Unable to save status file")
-		return
-	}
-	logger.Info("Finished processing")
 }

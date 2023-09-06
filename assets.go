@@ -11,15 +11,52 @@ import (
 	"strings"
 
 	"github.com/Luzifer/go_helpers/v2/str"
+	"github.com/pkg/errors"
 
 	"github.com/gofrs/uuid"
 )
 
-func shouldPackFile(extension string) bool {
-	return str.StringInSlice(extension, []string{
-		".log",
-		".pdf",
+func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
+	buf := new(bytes.Buffer)
+	w := tar.NewWriter(buf)
+
+	basePath := pathFromUUID(uid, filenameOutputDir)
+	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !shouldPackFile(path.Ext(info.Name())) {
+			return nil
+		}
+
+		tarInfo, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
+		err = w.WriteHeader(tarInfo)
+		if err != nil {
+			return err
+		}
+		osFile, err := os.Open(p) // #nosec G304
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(w, osFile); err != nil {
+			return err
+		}
+		osFile.Close() // #nosec G104
+
+		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, w.Close()
 }
 
 func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
@@ -65,9 +102,11 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	return buf, w.Close()
 }
 
-func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
-	buf := new(bytes.Buffer)
-	w := tar.NewWriter(buf)
+func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
+	var (
+		buf   = new(bytes.Buffer)
+		found bool
+	)
 
 	basePath := pathFromUUID(uid, filenameOutputDir)
 	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
@@ -75,35 +114,35 @@ func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
 			return err
 		}
 
-		if !shouldPackFile(path.Ext(info.Name())) {
+		if path.Ext(info.Name()) != ".pdf" {
 			return nil
 		}
 
-		tarInfo, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
-		err = w.WriteHeader(tarInfo)
-		if err != nil {
-			return err
-		}
 		osFile, err := os.Open(p) // #nosec G304
 		if err != nil {
-			return err
+			return errors.Wrap(err, "opening file")
 		}
 
-		if _, err := io.Copy(w, osFile); err != nil {
-			return err
+		if _, err := io.Copy(buf, osFile); err != nil {
+			return errors.Wrap(err, "reading file")
 		}
 		osFile.Close() // #nosec G104
 
-		return nil
+		found = true
+		return filepath.SkipAll
 	})
 
-	if err != nil {
-		return nil, err
+	if !found {
+		// We found no file
+		return nil, errors.New("no pdf found")
 	}
 
-	return buf, w.Close()
+	return buf, err
+}
+
+func shouldPackFile(extension string) bool {
+	return str.StringInSlice(extension, []string{
+		".log",
+		".pdf",
+	})
 }
