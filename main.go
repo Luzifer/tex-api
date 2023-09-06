@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -109,8 +110,14 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 
 	case "application/pdf":
 		contentType = "application/pdf"
-		content, err = getAssetsPDF(uid)
 		filename = uid.String() + ".pdf"
+		content, err = getAssetsFile(uid, ".pdf")
+
+		if errors.Is(err, fs.ErrNotExist) && r.URL.Query().Has("log-on-error") {
+			contentType = "application/octet-stream"
+			filename = uid.String() + ".log"
+			content, err = getAssetsFile(uid, ".log")
+		}
 
 	default:
 		content, err = buildAssetsZIP(uid)

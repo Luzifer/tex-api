@@ -48,7 +48,7 @@ main.log
 main.pdf
 
 # Using the default-env and exchanging a TeX file for a PDF
-# curl -sSL -H 'Accept: application/pdf' --data-binary @main.tex -o main.pdf localhost:3000/job
+# curl -L -H 'Accept: application/pdf' --data-binary @main.tex -OJ localhost:3000/job
 ```
 
 What happened here is we packed all assets required for generating the letter into the ZIP archive, pushed it to the API, waited for it to build a TAR and extracted the resulting files from it.
@@ -69,3 +69,5 @@ GET   /job/{uuid}/download  Download the resulting archive (You may specify an
                             Accept header to select whether to receive a ZIP, a
                             TAR archive or just the raw PDF.)
 ```
+
+All routes accept the `log-on-error` parameter: If set a PDF download (`Accept` header set to `application/pdf`) will return the log instead of the PDF if no PDF is found.

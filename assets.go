@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -109,7 +110,7 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	return buf, errors.Wrap(w.Close(), "closing zip file")
 }
 
-func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
+func getAssetsFile(uid uuid.UUID, ext string) (io.Reader, error) {
 	var (
 		buf   = new(bytes.Buffer)
 		found bool
@@ -121,7 +122,7 @@ func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
 			return err
 		}
 
-		if path.Ext(info.Name()) != ".pdf" {
+		if path.Ext(info.Name()) != ext {
 			return nil
 		}
 
@@ -131,7 +132,7 @@ func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
 		}
 		defer func() {
 			if err := osFile.Close(); err != nil {
-				logrus.WithError(err).Error("closing output pdf file (leaked fd)")
+				logrus.WithError(err).Error("closing output file (leaked fd)")
 			}
 		}()
 
@@ -145,7 +146,7 @@ func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
 
 	if !found {
 		// We found no file
-		return nil, errors.New("no pdf found")
+		return nil, fs.ErrNotExist
 	}
 
 	return buf, errors.Wrap(err, "walking source dir")

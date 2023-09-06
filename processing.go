@@ -6,7 +6,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -133,6 +132,7 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	go jobProcessor(jobUUID)
 
 	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
+	u.RawQuery = r.URL.Query().Encode()
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 
@@ -163,19 +163,30 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 		fallthrough
 
 	case statusStarted:
-		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
-		u.RawQuery = url.Values{"loop": []string{strconv.Itoa(loop)}}.Encode()
-
 		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
+
+		params := r.URL.Query()
+		params.Set("loop", strconv.Itoa(loop))
+
+		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
+		u.RawQuery = params.Encode()
 
 		http.Redirect(res, r, u.String(), http.StatusFound)
 		return
 
 	case statusError:
+		if r.URL.Query().Has("log-on-error") {
+			u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
+			u.RawQuery = r.URL.Query().Encode()
+			http.Redirect(res, r, u.String(), http.StatusFound)
+			return
+		}
+
 		http.Error(res, "Processing ran into an error.", http.StatusInternalServerError)
 
 	case statusFinished:
 		u := urlMust(router.Get("downloadAssets").URL("uid", uid.String()))
+		u.RawQuery = r.URL.Query().Encode()
 		http.Redirect(res, r, u.String(), http.StatusFound)
 	}
 }
