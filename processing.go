@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -133,6 +134,18 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 
 	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
 	u.RawQuery = r.URL.Query().Encode()
+
+	if r.URL.Query().Has("report-urls") {
+		if err := json.NewEncoder(res).Encode(map[string]string{
+			"download": urlMust(router.Get("downloadAssets").URL("uid", jobUUID.String())).String(),
+			"status":   urlMust(router.Get("getJobStatus").URL("uid", jobUUID.String())).String(),
+			"wait":     urlMust(router.Get("waitForJob").URL("uid", jobUUID.String())).String(),
+		}); err != nil {
+			serverErrorf(res, err, "encoding url response")
+		}
+		return
+	}
+
 	http.Redirect(res, r, u.String(), http.StatusFound)
 }
 

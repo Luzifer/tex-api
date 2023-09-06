@@ -71,3 +71,13 @@ GET   /job/{uuid}/download  Download the resulting archive (You may specify an
 ```
 
 All routes accept the `log-on-error` parameter: If set a PDF download (`Accept` header set to `application/pdf`) will return the log instead of the PDF if no PDF is found.
+
+Providing `report-urls` parameter to the `POST /jobs` endpoint will not redirect to the wait endpoint but report a JSON object containing the URL paths:
+
+```json
+{
+  "download": "/job/fb5ee7b8-679a-4bf2-951b-acabaf43b43e/download",
+  "status": "/job/fb5ee7b8-679a-4bf2-951b-acabaf43b43e",
+  "wait": "/job/fb5ee7b8-679a-4bf2-951b-acabaf43b43e/wait"
+}
+```
