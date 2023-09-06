@@ -88,6 +88,23 @@ func main() {
 	}
 }
 
+func chooseDistribution(r *http.Request) string {
+	if dist := r.URL.Query().Get("format"); dist != "" {
+		return dist
+	}
+
+	switch r.Header.Get("Accept") {
+	case "application/tar", "application/x-tar", "application/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
+		return "tar"
+
+	case "application/pdf":
+		return "pdf"
+
+	default:
+		return "zip"
+	}
+}
+
 func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uid, err := uuid.FromString(vars["uid"])
@@ -102,13 +119,13 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 		filename    string
 	)
 
-	switch r.Header.Get("Accept") {
-	case "application/tar", "application/x-tar", "application/x-gtar", "multipart/x-tar", "application/x-compress", "application/x-compressed":
+	switch dist := chooseDistribution(r); dist {
+	case "tar":
 		contentType = "application/tar"
 		content, err = buildAssetsTAR(uid)
 		filename = uid.String() + ".tar"
 
-	case "application/pdf":
+	case "pdf":
 		contentType = "application/pdf"
 		filename = uid.String() + ".pdf"
 		content, err = getAssetsFile(uid, ".pdf")
@@ -119,9 +136,12 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 			content, err = getAssetsFile(uid, ".log")
 		}
 
-	default:
+	case "zip":
 		content, err = buildAssetsZIP(uid)
 		filename = uid.String() + ".zip"
+
+	default:
+		err = errors.Errorf("unknown distribution %q", dist)
 	}
 
 	if err != nil {
