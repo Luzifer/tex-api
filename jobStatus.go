@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 )
 
 type (
@@ -28,6 +29,7 @@ const (
 	statusFinished = "finished"
 )
 
+//revive:disable-next-line:get-return // Is not a getter
 func getJobStatus(res http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	uid, err := uuid.FromString(vars["uid"])
@@ -36,13 +38,14 @@ func getJobStatus(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if status, err := loadStatusByUUID(uid); err == nil {
-		if encErr := json.NewEncoder(res).Encode(status); encErr != nil {
-			serverErrorf(res, encErr, "Unable to serialize status file")
-			return
-		}
-	} else {
-		serverErrorf(res, err, "Unable to read status file")
+	status, err := loadStatusByUUID(uid)
+	if err != nil {
+		serverErrorf(res, err, "reading status file")
+		return
+	}
+
+	if encErr := json.NewEncoder(res).Encode(status); encErr != nil {
+		serverErrorf(res, encErr, "serializing status file")
 		return
 	}
 }
@@ -52,13 +55,14 @@ func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 
 	status := jobStatus{}
 	// #nosec G304
-	if f, err := os.Open(statusFile); err == nil {
-		defer f.Close()
-		if err = json.NewDecoder(f).Decode(&status); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, err
+	f, err := os.Open(statusFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "opening status file")
+	}
+	defer f.Close()
+
+	if err = json.NewDecoder(f).Decode(&status); err != nil {
+		return nil, errors.Wrap(err, "decoding status file")
 	}
 
 	return &status, nil
@@ -73,16 +77,19 @@ func (s jobStatus) Save() error {
 	uid, _ := uuid.FromString(s.UUID) // #nosec G104
 	f, err := os.Create(pathFromUUID(uid, filenameStatusTemp))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "creating status file")
 	}
 	defer f.Close()
 
 	if err = json.NewEncoder(f).Encode(s); err != nil {
-		return err
+		return errors.Wrap(err, "encoding status")
 	}
 
-	return os.Rename(
-		pathFromUUID(uid, filenameStatusTemp),
-		pathFromUUID(uid, filenameStatus),
+	return errors.Wrap(
+		os.Rename(
+			pathFromUUID(uid, filenameStatusTemp),
+			pathFromUUID(uid, filenameStatus),
+		),
+		"moving status file in place",
 	)
 }

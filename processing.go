@@ -1,9 +1,12 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -13,6 +16,13 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
+	"github.com/spf13/afero/zipfs"
+)
+
+const (
+	createModeDir  = 0o700
+	createModeFile = 0o600
 )
 
 func jobProcessor(uid uuid.UUID) {
@@ -59,20 +69,54 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 	inputFile := pathFromUUID(jobUUID, filenameInput)
 	statusFile := pathFromUUID(jobUUID, filenameStatus)
 
-	if err := os.Mkdir(path.Dir(inputFile), 0750); err != nil {
+	// Create the target directory
+	if err := os.Mkdir(path.Dir(inputFile), createModeDir); err != nil {
 		logrus.WithError(err).Errorf("Unable to create job dir %q", path.Dir(inputFile))
 	}
 
-	if f, err := os.Create(inputFile); err == nil {
-		defer f.Close()
-		if _, copyErr := io.Copy(f, r.Body); copyErr != nil {
-			serverErrorf(res, copyErr, "Unable to copy input file %q", inputFile)
+	// Create a copy-on-write fs for the target
+	targetFs := afero.NewBasePathFs(afero.NewOsFs(), path.Dir(inputFile))
+
+	// Cache the input body
+	body := new(bytes.Buffer)
+	if _, err := io.Copy(body, r.Body); err != nil {
+		serverErrorf(res, err, "reading input body")
+		return
+	}
+
+	// Pull in the new files into the target dir
+	var inputSource afero.Fs
+	if hasZipHeader(body.Bytes()) {
+		// We got an archive
+		zipR, err := zip.NewReader(bytes.NewReader(body.Bytes()), int64(body.Len()))
+		if err != nil {
+			serverErrorf(res, err, "opening input body as zip")
 			return
 		}
-		f.Sync() // #nosec G104
+		inputSource = zipfs.New(zipR)
 	} else {
-		serverErrorf(res, err, "Unable to write input file %q", inputFile)
+		// We assume that was a single TeX file
+		inputSource = afero.NewMemMapFs()
+		if err := afero.WriteFile(inputSource, "main.tex", body.Bytes(), createModeFile); err != nil {
+			serverErrorf(res, err, "writing input to in-mem fs")
+			return
+		}
+	}
+
+	if err := syncFilesToOverlay(inputSource, targetFs); err != nil {
+		serverErrorf(res, err, "copying files to target dir")
 		return
+	}
+
+	// If set copy the default env into the target dir
+	if cfg.DefaultEnv != "" {
+		if err := syncFilesToOverlay(
+			afero.NewReadOnlyFs(afero.NewBasePathFs(afero.NewOsFs(), cfg.DefaultEnv)),
+			targetFs,
+		); err != nil {
+			serverErrorf(res, err, "copying default env files to target dir")
+			return
+		}
 	}
 
 	status := jobStatus{
@@ -120,7 +164,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 
 	case statusStarted:
 		u := urlMust(router.Get("waitForJob").URL("uid", uid.String()))
-		u.Query().Set("loop", strconv.Itoa(loop))
+		u.RawQuery = url.Values{"loop": []string{strconv.Itoa(loop)}}.Encode()
 
 		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
 

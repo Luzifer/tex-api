@@ -11,6 +11,8 @@
 
 - Start the container at a trusted location:  
 `docker run -d -p 3000:3000 -v /data/tex-api:/storage luzifer/tex-api`
+- Optionally provide a default env:  
+`docker run -d -p 3000:3000 -v /etc/tex-api/defaultenv:/default -e DEFAULT_ENV=/default luzifer/tex-api`
 - Compile a ZIP file, send it to the API and get the result:
 
 ```bash
@@ -44,6 +46,9 @@
 # curl -sSL -H 'Accept: application/tar' --data-binary @letter.zip localhost:3000/job | tar -xvf -
 main.log
 main.pdf
+
+# Using the default-env and exchanging a TeX file for a PDF
+# curl -sSL -H 'Accept: application/pdf' --data-binary @main.tex -o main.pdf localhost:3000/job
 ```
 
 What happened here is we packed all assets required for generating the letter into the ZIP archive, pushed it to the API, waited for it to build a TAR and extracted the resulting files from it.
@@ -54,10 +59,13 @@ What happened here is we packed all assets required for generating the letter in
 POST  /job                  Create a new processing job (request body is expected
                             to be a ZIP file having at least one .tex file at the
                             root of the archive) and redirect to the /wait endpoint
+                              Alternatively you can post a raw TeX file and let it
+                            render through the default environment provided when
+                            starting your container
 GET   /job/{uuid}           Retrieve the status of the processing job
 GET   /job/{uuid}/wait      Wait and redirect until the processing job is finished
                             or errored
 GET   /job/{uuid}/download  Download the resulting archive (You may specify an
-                            Accept header to select whether to receive a ZIP or
-                            TAR archive.)
+                            Accept header to select whether to receive a ZIP, a
+                            TAR archive or just the raw PDF.)
 ```

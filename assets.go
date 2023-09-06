@@ -32,31 +32,30 @@ func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
 
 		tarInfo, err := tar.FileInfoHeader(info, "")
 		if err != nil {
-			return err
+			return errors.Wrap(err, "creating tar entry")
 		}
 		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
 		err = w.WriteHeader(tarInfo)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "writing tar header")
 		}
 		osFile, err := os.Open(p) // #nosec G304
 		if err != nil {
-			return err
+			return errors.Wrap(err, "opening source file")
 		}
 
 		if _, err := io.Copy(w, osFile); err != nil {
-			return err
+			return errors.Wrap(err, "copying source file")
 		}
 		osFile.Close() // #nosec G104
 
 		return nil
 	})
-
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "walking source dir")
 	}
 
-	return buf, w.Close()
+	return buf, errors.Wrap(w.Close(), "closing tar file")
 }
 
 func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
@@ -75,31 +74,30 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 
 		zipInfo, err := zip.FileInfoHeader(info)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "creating zip header")
 		}
 		zipInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
 		zipFile, err := w.CreateHeader(zipInfo)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "writing zip header")
 		}
 		osFile, err := os.Open(p) // #nosec G304
 		if err != nil {
-			return err
+			return errors.Wrap(err, "opening source file")
 		}
 
 		if _, err := io.Copy(zipFile, osFile); err != nil {
-			return err
+			return errors.Wrap(err, "copying source file")
 		}
 		osFile.Close() // #nosec G104
 
 		return nil
 	})
-
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "walking source dir")
 	}
 
-	return buf, w.Close()
+	return buf, errors.Wrap(w.Close(), "closing zip file")
 }
 
 func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
@@ -137,7 +135,7 @@ func getAssetsPDF(uid uuid.UUID) (io.Reader, error) {
 		return nil, errors.New("no pdf found")
 	}
 
-	return buf, err
+	return buf, errors.Wrap(err, "walking source dir")
 }
 
 func shouldPackFile(extension string) bool {

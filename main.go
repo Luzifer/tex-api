@@ -25,6 +25,7 @@ const (
 
 var (
 	cfg = struct {
+		DefaultEnv     string `flag:"default-env" default:"" description:"Environment to copy to the job before unpacking"`
 		Script         string `flag:"script" default:"tex-build.sh" description:"Script to execute (needs to generate output directory)"`
 		Listen         string `flag:"listen" default:":3000" description:"IP/Port to listen on"`
 		StorageDir     string `flag:"storage-dir" default:"/storage" description:"Where to store uploaded ZIPs and resulting files"`
@@ -77,6 +78,10 @@ func main() {
 		ReadHeaderTimeout: time.Second,
 	}
 
+	logrus.WithFields(logrus.Fields{
+		"addr":    cfg.Listen,
+		"version": version,
+	}).Info("tex-api started")
 	if err := server.ListenAndServe(); err != nil {
 		logrus.WithError(err).Fatal("HTTP server exited with error")
 	}
@@ -121,5 +126,8 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 	res.Header().Set("Content-Type", contentType)
 	res.WriteHeader(http.StatusOK)
 
-	io.Copy(res, content) // #nosec G104
+	if _, err = io.Copy(res, content); err != nil {
+		serverErrorf(res, err, "writing content")
+		return
+	}
 }
