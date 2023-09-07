@@ -1,3 +1,14 @@
+# 1.0.0 / 2023-09-07
+
+  * Breaking: Add support for default env & raw TeX post, unpack received zip
+  * Refactor & add support for direct PDF download
+  * Add new URL parameters
+  * Lint: Fix linter errors
+  * Update deps
+
+> [!WARNING]  
+> This release breaks the previous approach of writing the zip file to the file system and letting the script unpack the files itself. You might need to adjust your build-script if you are not using the default script included in the container.
+
 # 0.4.1 / 2023-08-30
 
   * Update dependencies
