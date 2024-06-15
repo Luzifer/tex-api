@@ -20,7 +20,8 @@ ENV SCRIPT=/usr/local/bin/tex-build.sh
 RUN set -ex \
  && pacman --noconfirm -Sy \
       ca-certificates \
-      texlive
+      texlive \
+      texlive-lang
 
 COPY --from=builder /go/bin/tex-api /usr/local/bin/
 COPY                tex-build.sh    /usr/local/bin/
