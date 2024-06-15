@@ -10,18 +10,17 @@ RUN set -ex \
       -ldflags "-X main.version=$(git describe --tags || git rev-parse --short HEAD || echo dev)" \
       -mod=readonly
 
-FROM alpine:latest
+
+FROM luzifer/archlinux:latest
 
 LABEL maintainer "Knut Ahlers <knut@ahlers.me>"
 
 ENV SCRIPT=/usr/local/bin/tex-build.sh
 
 RUN set -ex \
- && apk --no-cache add \
-      bash \
+ && pacman --noconfirm -Sy \
       ca-certificates \
-      texlive-xetex \
-      texmf-dist-most
+      texlive
 
 COPY --from=builder /go/bin/tex-api /usr/local/bin/
 COPY                tex-build.sh    /usr/local/bin/
