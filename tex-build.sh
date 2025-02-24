@@ -3,5 +3,12 @@ set -euxo pipefail
 
 mkdir -p output
 
-xelatex -halt-on-error -output-directory=output *.tex
-xelatex -halt-on-error -output-directory=output *.tex
+latexmk \
+  -pdfxe \
+  -output-directory=output \
+  *.tex
+
+latexmk \
+  -c \
+  -output-directory=output \
+  *.tex
