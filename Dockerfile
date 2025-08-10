@@ -22,6 +22,7 @@ RUN set -ex \
       bash \
       ca-certificates \
       texlive \
+      texlive-xetex \
       texmf-dist-binextra \
       texmf-dist-fontsrecommended \
       texmf-dist-fontutils \
