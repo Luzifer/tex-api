@@ -27,6 +27,7 @@ RUN set -ex \
       texmf-dist-fontsrecommended \
       texmf-dist-fontutils \
       texmf-dist-langenglish \
+      texmf-dist-langfrench \
       texmf-dist-langgerman \
       texmf-dist-latexextra \
       texmf-dist-pictures \
