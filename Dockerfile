@@ -1,4 +1,4 @@
-FROM golang:alpine as builder
+FROM golang:1.24-alpine AS builder
 
 COPY . /go/src/github.com/Luzifer/tex-api
 WORKDIR /go/src/github.com/Luzifer/tex-api
@@ -11,17 +11,23 @@ RUN set -ex \
       -mod=readonly
 
 
-FROM luzifer/archlinux:latest
+FROM alpine:3.22
 
-LABEL maintainer "Knut Ahlers <knut@ahlers.me>"
+LABEL maintainer="Knut Ahlers <knut@ahlers.me>"
 
 ENV SCRIPT=/usr/local/bin/tex-build.sh
 
 RUN set -ex \
- && pacman --noconfirm -Sy \
+ && apk --no-cache add \
       ca-certificates \
       texlive \
-      texlive-lang
+      texmf-dist-binextra \
+      texmf-dist-fontsrecommended \
+      texmf-dist-fontutils \
+      texmf-dist-langenglish \
+      texmf-dist-langgerman \
+      texmf-dist-pictures \
+      texmf-dist-xetex
 
 COPY --from=builder /go/bin/tex-api /usr/local/bin/
 COPY                tex-build.sh    /usr/local/bin/
