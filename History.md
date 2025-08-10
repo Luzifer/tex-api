@@ -1,3 +1,11 @@
+# 1.1.0 / 2025-08-11
+
+  * feat: move to latexmk for improved rendering flow
+  * feat: slim down docker image
+  * fix(deps): update module github.com/luzifer/rconfig/v2 to v2.6.0
+  * fix(deps): update module github.com/spf13/afero to v1.14.0
+  * chore(deps): update dependency go to v1.24.6
+
 # 1.0.0 / 2023-09-07
 
   * Breaking: Add support for default env & raw TeX post, unpack received zip
