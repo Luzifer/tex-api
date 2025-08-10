@@ -2,7 +2,7 @@ module github.com/Luzifer/tex-api
 
 go 1.22
 
-toolchain go1.23.6
+toolchain go1.24.6
 
 require (
 	github.com/Luzifer/go_helpers/v2 v2.25.0
