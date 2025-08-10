@@ -28,6 +28,7 @@ RUN set -ex \
       texmf-dist-fontutils \
       texmf-dist-langenglish \
       texmf-dist-langgerman \
+      texmf-dist-latexextra \
       texmf-dist-pictures \
       texmf-dist-xetex
 
