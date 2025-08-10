@@ -19,6 +19,7 @@ ENV SCRIPT=/usr/local/bin/tex-build.sh
 
 RUN set -ex \
  && apk --no-cache add \
+      bash \
       ca-certificates \
       texlive \
       texmf-dist-binextra \
