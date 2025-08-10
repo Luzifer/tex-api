@@ -1,12 +1,12 @@
 module github.com/Luzifer/tex-api
 
-go 1.22
+go 1.23
 
 toolchain go1.24.6
 
 require (
 	github.com/Luzifer/go_helpers/v2 v2.25.0
-	github.com/Luzifer/rconfig/v2 v2.5.2
+	github.com/Luzifer/rconfig/v2 v2.6.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gorilla/mux v1.8.1
 	github.com/pkg/errors v0.9.1
