@@ -1,3 +1,10 @@
+# 1.1.2 / 2025-12-03
+
+  * fix(ci): push built tags
+  * ci(deps): update actions/checkout action to v6
+  * ci(deps): update docker/login-action action to v3.6.0 (#16)
+  * ci(deps): update docker/metadata-action action to v5.10.0
+
 # 1.1.1 / 2025-12-03
 
   * chore(ci): add publishing to GHCR
