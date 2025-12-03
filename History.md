@@ -1,3 +1,9 @@
+# 1.1.1 / 2025-12-03
+
+  * chore(ci): add publishing to GHCR
+  * chore(deps): update dependency go to v1.25.4
+  * fix(deps): update module github.com/spf13/afero to v1.15.0
+
 # 1.1.0 / 2025-08-11
 
   * feat: move to latexmk for improved rendering flow
