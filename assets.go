@@ -9,9 +9,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
-	"github.com/Luzifer/go_helpers/v2/str"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -153,8 +153,8 @@ func getAssetsFile(uid uuid.UUID, ext string) (io.Reader, error) {
 }
 
 func shouldPackFile(extension string) bool {
-	return str.StringInSlice(extension, []string{
+	return slices.Contains([]string{
 		".log",
 		".pdf",
-	})
+	}, extension)
 }

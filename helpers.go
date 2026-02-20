@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"time"
 
-	"github.com/Luzifer/go_helpers/v2/str"
 	"github.com/gofrs/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -22,12 +22,12 @@ func hasZipHeader(data []byte) bool {
 		return false
 	}
 
-	return str.StringInSlice(string(data[:4]), []string{
+	return slices.Contains([]string{
 		// https://en.wikipedia.org/wiki/ZIP_(file_format)
 		"PK\x03\x04",
 		"PK\x05\x06",
 		"PK\x07\x08",
-	})
+	}, string(data[:4]))
 }
 
 func pathFromUUID(uid uuid.UUID, filename string) string {
