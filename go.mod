@@ -2,7 +2,7 @@ module github.com/Luzifer/tex-api
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/Luzifer/rconfig/v2 v2.6.2
