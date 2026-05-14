@@ -2,14 +2,21 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	statusCreated  = "created"
+	statusStarted  = "started"
+	statusError    = "error"
+	statusFinished = "finished"
 )
 
 type (
@@ -21,13 +28,6 @@ type (
 	}
 
 	status string
-)
-
-const (
-	statusCreated  = "created"
-	statusStarted  = "started"
-	statusError    = "error"
-	statusFinished = "finished"
 )
 
 //revive:disable-next-line:get-return // Is not a getter
@@ -58,7 +58,7 @@ func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	// #nosec G304
 	f, err := os.Open(statusFile)
 	if err != nil {
-		return nil, errors.Wrap(err, "opening status file")
+		return nil, fmt.Errorf("opening status file: %w", err)
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -67,22 +67,17 @@ func loadStatusByUUID(uid uuid.UUID) (*jobStatus, error) {
 	}()
 
 	if err = json.NewDecoder(f).Decode(&status); err != nil {
-		return nil, errors.Wrap(err, "decoding status file")
+		return nil, fmt.Errorf("decoding status file: %w", err)
 	}
 
 	return &status, nil
-}
-
-func (s *jobStatus) UpdateStatus(st status) {
-	s.Status = st
-	s.UpdatedAt = time.Now()
 }
 
 func (s jobStatus) Save() error {
 	uid, _ := uuid.FromString(s.UUID) // #nosec G104
 	f, err := os.Create(pathFromUUID(uid, filenameStatusTemp))
 	if err != nil {
-		return errors.Wrap(err, "creating status file")
+		return fmt.Errorf("creating status file: %w", err)
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -91,14 +86,20 @@ func (s jobStatus) Save() error {
 	}()
 
 	if err = json.NewEncoder(f).Encode(s); err != nil {
-		return errors.Wrap(err, "encoding status")
+		return fmt.Errorf("encoding status: %w", err)
 	}
 
-	return errors.Wrap(
-		os.Rename(
-			pathFromUUID(uid, filenameStatusTemp),
-			pathFromUUID(uid, filenameStatus),
-		),
-		"moving status file in place",
-	)
+	if err = os.Rename(
+		pathFromUUID(uid, filenameStatusTemp),
+		pathFromUUID(uid, filenameStatus),
+	); err != nil {
+		return fmt.Errorf("moving status file in place: %w", err)
+	}
+
+	return nil
+}
+
+func (s *jobStatus) UpdateStatus(st status) {
+	s.Status = st
+	s.UpdatedAt = time.Now()
 }

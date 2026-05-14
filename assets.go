@@ -4,18 +4,16 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
-	"strings"
-
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"github.com/gofrs/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
@@ -23,45 +21,70 @@ func buildAssetsTAR(uid uuid.UUID) (io.Reader, error) {
 	w := tar.NewWriter(buf)
 
 	basePath := pathFromUUID(uid, filenameOutputDir)
-	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
+	root, err := os.OpenRoot(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("opening source root: %w", err)
+	}
+	defer closeSourceRoot(root)
+
+	err = filepath.WalkDir(basePath, func(p string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if !shouldPackFile(path.Ext(info.Name())) {
+		if entry.IsDir() || !shouldPackFile(path.Ext(entry.Name())) {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(basePath, p)
+		if err != nil {
+			return fmt.Errorf("resolving relative path: %w", err)
+		}
+
+		osFile, err := root.Open(relPath)
+		if err != nil {
+			return fmt.Errorf("opening source file: %w", err)
+		}
+
+		info, err := osFile.Stat()
+		if err != nil {
+			closeOutputFile(osFile)
+			return fmt.Errorf("stat source file: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			closeOutputFile(osFile)
 			return nil
 		}
 
 		tarInfo, err := tar.FileInfoHeader(info, "")
 		if err != nil {
-			return errors.Wrap(err, "creating tar entry")
+			closeOutputFile(osFile)
+			return fmt.Errorf("creating tar entry: %w", err)
 		}
-		tarInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
+		tarInfo.Name = filepath.ToSlash(relPath)
 		err = w.WriteHeader(tarInfo)
 		if err != nil {
-			return errors.Wrap(err, "writing tar header")
+			closeOutputFile(osFile)
+			return fmt.Errorf("writing tar header: %w", err)
 		}
-		osFile, err := os.Open(p) // #nosec G304
-		if err != nil {
-			return errors.Wrap(err, "opening source file")
-		}
-		defer func() {
-			if err := osFile.Close(); err != nil {
-				logrus.WithError(err).Error("closing output file (leaked fd)")
-			}
-		}()
 
 		if _, err := io.Copy(w, osFile); err != nil {
-			return errors.Wrap(err, "copying source file")
+			closeOutputFile(osFile)
+			return fmt.Errorf("copying source file: %w", err)
 		}
+		closeOutputFile(osFile)
 
 		return nil
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "walking source dir")
+		return nil, fmt.Errorf("walking source dir: %w", err)
 	}
 
-	return buf, errors.Wrap(w.Close(), "closing tar file")
+	if err = w.Close(); err != nil {
+		return nil, fmt.Errorf("closing tar file: %w", err)
+	}
+
+	return buf, nil
 }
 
 func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
@@ -69,45 +92,82 @@ func buildAssetsZIP(uid uuid.UUID) (io.Reader, error) {
 	w := zip.NewWriter(buf)
 
 	basePath := pathFromUUID(uid, filenameOutputDir)
-	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
+	root, err := os.OpenRoot(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("opening source root: %w", err)
+	}
+	defer closeSourceRoot(root)
+
+	err = filepath.WalkDir(basePath, func(p string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if !shouldPackFile(path.Ext(info.Name())) {
+		if entry.IsDir() || !shouldPackFile(path.Ext(entry.Name())) {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(basePath, p)
+		if err != nil {
+			return fmt.Errorf("resolving relative path: %w", err)
+		}
+
+		osFile, err := root.Open(relPath)
+		if err != nil {
+			return fmt.Errorf("opening source file: %w", err)
+		}
+
+		info, err := osFile.Stat()
+		if err != nil {
+			closeOutputFile(osFile)
+			return fmt.Errorf("stat source file: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			closeOutputFile(osFile)
 			return nil
 		}
 
 		zipInfo, err := zip.FileInfoHeader(info)
 		if err != nil {
-			return errors.Wrap(err, "creating zip header")
+			closeOutputFile(osFile)
+			return fmt.Errorf("creating zip header: %w", err)
 		}
-		zipInfo.Name = strings.TrimLeft(strings.Replace(p, basePath, "", 1), "/\\")
+		zipInfo.Name = filepath.ToSlash(relPath)
 		zipFile, err := w.CreateHeader(zipInfo)
 		if err != nil {
-			return errors.Wrap(err, "writing zip header")
+			closeOutputFile(osFile)
+			return fmt.Errorf("writing zip header: %w", err)
 		}
-		osFile, err := os.Open(p) // #nosec G304
-		if err != nil {
-			return errors.Wrap(err, "opening source file")
-		}
-		defer func() {
-			if err := osFile.Close(); err != nil {
-				logrus.WithError(err).Error("closing output file (leaked fd)")
-			}
-		}()
 
 		if _, err := io.Copy(zipFile, osFile); err != nil {
-			return errors.Wrap(err, "copying source file")
+			closeOutputFile(osFile)
+			return fmt.Errorf("copying source file: %w", err)
 		}
+		closeOutputFile(osFile)
 
 		return nil
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "walking source dir")
+		return nil, fmt.Errorf("walking source dir: %w", err)
 	}
 
-	return buf, errors.Wrap(w.Close(), "closing zip file")
+	if err = w.Close(); err != nil {
+		return nil, fmt.Errorf("closing zip file: %w", err)
+	}
+
+	return buf, nil
+}
+
+func closeOutputFile(osFile *os.File) {
+	if err := osFile.Close(); err != nil {
+		logrus.WithError(err).Error("closing output file (leaked fd)")
+	}
+}
+
+func closeSourceRoot(root *os.Root) {
+	if err := root.Close(); err != nil {
+		logrus.WithError(err).Error("closing source root")
+	}
 }
 
 func getAssetsFile(uid uuid.UUID, ext string) (io.Reader, error) {
@@ -117,39 +177,60 @@ func getAssetsFile(uid uuid.UUID, ext string) (io.Reader, error) {
 	)
 
 	basePath := pathFromUUID(uid, filenameOutputDir)
-	err := filepath.Walk(basePath, func(p string, info os.FileInfo, err error) error {
+	root, err := os.OpenRoot(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("opening source root: %w", err)
+	}
+	defer closeSourceRoot(root)
+
+	err = filepath.WalkDir(basePath, func(p string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if path.Ext(info.Name()) != ext {
+		if entry.IsDir() || path.Ext(entry.Name()) != ext {
 			return nil
 		}
 
-		osFile, err := os.Open(p) // #nosec G304
+		relPath, err := filepath.Rel(basePath, p)
 		if err != nil {
-			return errors.Wrap(err, "opening file")
+			return fmt.Errorf("resolving relative path: %w", err)
 		}
-		defer func() {
-			if err := osFile.Close(); err != nil {
-				logrus.WithError(err).Error("closing output file (leaked fd)")
-			}
-		}()
+
+		osFile, err := root.Open(relPath)
+		if err != nil {
+			return fmt.Errorf("opening file: %w", err)
+		}
+
+		info, err := osFile.Stat()
+		if err != nil {
+			closeOutputFile(osFile)
+			return fmt.Errorf("stat source file: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			closeOutputFile(osFile)
+			return nil
+		}
 
 		if _, err := io.Copy(buf, osFile); err != nil {
-			return errors.Wrap(err, "reading file")
+			closeOutputFile(osFile)
+			return fmt.Errorf("reading file: %w", err)
 		}
+		closeOutputFile(osFile)
 
 		found = true
 		return filepath.SkipAll
 	})
+	if err != nil {
+		return nil, fmt.Errorf("walking source dir: %w", err)
+	}
 
 	if !found {
 		// We found no file
 		return nil, fs.ErrNotExist
 	}
 
-	return buf, errors.Wrap(err, "walking source dir")
+	return buf, nil
 }
 
 func shouldPackFile(extension string) bool {

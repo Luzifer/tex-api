@@ -1,6 +1,8 @@
+// API Server to render LaTeX documents
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -9,8 +11,6 @@ import (
 	"time"
 
 	"github.com/Luzifer/rconfig/v2"
-	"github.com/pkg/errors"
-
 	"github.com/gofrs/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -40,7 +40,7 @@ var (
 func initApp() error {
 	rconfig.AutoEnv(true)
 	if err := rconfig.Parse(&cfg); err != nil {
-		return errors.Wrap(err, "parsing cli options")
+		return fmt.Errorf("parsing cli options: %w", err)
 	}
 
 	return nil
@@ -141,7 +141,7 @@ func downloadAssets(res http.ResponseWriter, r *http.Request) {
 		filename = uid.String() + ".zip"
 
 	default:
-		err = errors.Errorf("unknown distribution %q", dist)
+		err = fmt.Errorf("unknown distribution %q", dist)
 	}
 
 	if err != nil {

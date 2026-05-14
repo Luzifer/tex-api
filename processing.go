@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"math"
@@ -23,9 +24,11 @@ import (
 const (
 	createModeDir  = 0o700
 	createModeFile = 0o600
+
+	renderTimeout = 2 * time.Minute
 )
 
-func jobProcessor(uid uuid.UUID) {
+func jobProcessor(ctx context.Context, uid uuid.UUID) {
 	logger := logrus.WithField("uuid", uid)
 	logger.Info("Started processing")
 
@@ -36,7 +39,10 @@ func jobProcessor(uid uuid.UUID) {
 		return
 	}
 
-	cmd := exec.Command("/bin/bash", cfg.Script) // #nosec G204
+	ctx, cancel := context.WithTimeout(ctx, renderTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "/bin/bash", cfg.Script) // #nosec G204
 	cmd.Dir = processingDir
 	cmd.Stderr = logger.WriterLevel(logrus.InfoLevel) // Bash uses stderr for `-x` parameter
 
@@ -130,7 +136,8 @@ func startNewJob(res http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go jobProcessor(jobUUID)
+	//nolint:contextcheck // command runs longer than the request and must not use request context
+	go jobProcessor(context.Background(), jobUUID)
 
 	u := urlMust(router.Get("waitForJob").URL("uid", jobUUID.String()))
 	u.RawQuery = r.URL.Query().Encode()
@@ -172,10 +179,7 @@ func waitForJob(res http.ResponseWriter, r *http.Request) {
 	}
 
 	switch status.Status {
-	case statusCreated:
-		fallthrough
-
-	case statusStarted:
+	case statusCreated, statusStarted:
 		<-time.After(time.Duration(math.Pow(sleepBase, float64(loop))) * time.Second)
 
 		params := r.URL.Query()
