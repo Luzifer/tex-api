@@ -27,7 +27,7 @@ func hasZipHeader(data []byte) bool {
 		"PK\x03\x04",
 		"PK\x05\x06",
 		"PK\x07\x08",
-	}, string(data[:4]))
+	}, string(data[:zipHeaderLength]))
 }
 
 func pathFromUUID(uid uuid.UUID, filename string) string {
