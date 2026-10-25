@@ -1,3 +1,13 @@
+# 1.1.4 / 2026-10-25
+
+  * chore(deps): update alpine docker tag to v3.24.2 (#75)
+  * chore(deps): update golang docker tag to v1.27.3 (#81)
+  * chore(deps): update go toolchain directive to v1.27.3 [security] (#80)
+  * chore(deps): update module golang.org/x/sys to v0.48.0 [security] (#76)
+  * chore(deps): update module golang.org/x/text to v0.42.0 [security] (#77)
+  * fix(deps): update module github.com/luzifer/rconfig/v2 to v2.6.2
+  * fix(deps): update module github.com/sirupsen/logrus to v1.10.2 (#71)
+
 # 1.1.3 / 2026-02-20
 
   * fix(deps): update module github.com/luzifer/rconfig/v2 to v2.6.1
